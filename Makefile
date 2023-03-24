@@ -6,7 +6,7 @@ PREFIX="/opt/pkg/petalinux/2018.3/tools/linux-i386/gcc-arm-linux-gnueabi/bin/arm
 GOCC=${PREFIX}gcc
 GOAR=${PREFIX}ar
 
-SRCS := fly_uart.c hello.c
+SRCS := fly_uart.c fly_dma.c hello.c
 # APP_OBJS := fly_uart.o hello.o
 MY_LIB = libfly.a	#生成的静态库名称，记得在main里面导入
 

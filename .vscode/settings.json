@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "fly_uart.h": "c",
-        "termios.h": "c"
+        "termios.h": "c",
+        "sigaction.h": "c"
     }
 }

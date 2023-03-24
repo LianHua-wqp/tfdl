@@ -1,0 +1,14 @@
+# 注意空格间距
+mode: "dev"
+port: 8081
+
+hardware:
+  uart: "/dev/ttyPS0"
+  dma: "/dev/fly_dma1"
+
+log:
+  level: "debug"
+  filename: "./log/bluebell.log"
+  max_size: 1000  #M
+  max_agent: 30 #最大备份天数
+  max_backups: 5

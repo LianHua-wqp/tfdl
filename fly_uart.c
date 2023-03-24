@@ -322,9 +322,16 @@ int uart_recv(int fd, char buff[], int number) // fd 为串口句柄 buff为用�
     return 1;
 }
 
-int init_rs422_uart()
+int init_rs422_uart(char * devName)
 {
-    uart_fd = UART1_Open("/dev/ttyPS0");
+    if (devName == NULL)
+    {
+        printf("init_rs422_uart devName is null");
+        return -1;
+    }
+
+    uart_fd = UART1_Open(devName);
+    // uart_fd = UART1_Open("/dev/ttyPS0");
     if (uart_fd < 0)
     {
         printf("open tty fail\n");

@@ -11,6 +11,11 @@ import (
 
 var Conf = new(AppConfig)
 
+const (
+	FILE_PATH = "./conf"
+	FILE_NAME = "config.yaml"
+)
+
 type AppConfig struct {
 	Mode       string `mapstructure:"mode"`
 	Port       int    `mapstructure:"port"`
@@ -69,9 +74,12 @@ func Init(filename string) error {
 	// 如果 path 路径不存在，会有 err，然后通过 IsNotExist 判定文件路径是否存在，如果 true 则不存在，注意用 os.ModePerm 这样文件是可以写入的
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		// mkdir 创建目录，mkdirAll 可创建多层级目录
-		err = os.MkdirAll("./conf", os.ModePerm)
+		err = os.MkdirAll(FILE_PATH, os.ModePerm)
+		if err != nil {
+			return err
+		}
 		ReadConfInBuff()
-		viper.WriteConfigAs("config.yaml")
+		err = viper.WriteConfigAs(FILE_NAME)
 		return err
 	}
 

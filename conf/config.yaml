@@ -9,6 +9,6 @@ hardware:
 log:
   level: "debug"
   filename: "./log/bluebell.log"
-  max_size: 1000  #M
+  max_size: 10  #M
   max_agent: 30 #最大备份天数
   max_backups: 5

@@ -15,6 +15,7 @@ int callOnMeGo_cgo(int in); // 声明,cmiddle.go封装的中间件
 import "C"
 import (
 	"fmt"
+	"tfdl/logger"
 	"tfdl/settings"
 	"unsafe"
 )
@@ -34,6 +35,20 @@ func main() {
 		fmt.Println("read config.yaml failed", err)
 		return
 	}
+	if err = logger.Init(settings.Conf.LogConfig, settings.Conf.Mode); err != nil {
+		fmt.Printf("init logger failed, err:%v\n", err)
+		return
+	}
+
+	////初始化路由
+	//router := routers.SetupRouter()
+	//swag.InitRoutes(router) //注册swag路由
+	//zap.L().Info("http://localhost:8081/swagger/index.html")
+	//err = router.Run(fmt.Sprintf(":%d", settings.Conf.Port))
+	//if err != nil {
+	//	fmt.Printf("run server failed, err:%v\n", err)
+	//	return
+	//}
 
 	//使用unsafe.Pointer转换
 	//(C.callback_fcn)	强转为typedef int (*callback_fcn)(int);

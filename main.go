@@ -41,7 +41,7 @@ func main() {
 	C.some_c_func((C.callback_fcn)(unsafe.Pointer(C.callOnMeGo_cgo)))
 	cs := C.CString(settings.Conf.Hardware.Uart)
 	defer C.free(unsafe.Pointer(cs))
-	C.init_rs422_uart(cs) //
+	C.init_rs422_uart(cs) //初始化串口设备
 	return
 
 	// cs := C.CString("Hello World\n")
@@ -50,4 +50,6 @@ func main() {
 	C.init_dma_1()
 	// C.init_rs422_uart() //
 	// C.hello()
+
+	//todo	获取北斗位置信息
 }

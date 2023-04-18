@@ -1,278 +1,138 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/fcntl.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <pthread.h>
+#include <stdio.h>
 #include <stdbool.h>
-#include <assert.h>           
+#include <string.h>             // Strlen function
+
 #include <fcntl.h>              // Flags for open()
 #include <sys/stat.h>           // Open() system call
+#include <sys/types.h>          // Types for open()
 #include <sys/mman.h>           // Mmap system call
 #include <sys/ioctl.h>          // IOCTL system call
-#include <signal.h>             // Signal handling functions
-#include <net/if.h>
+#include <unistd.h>             // Close() system call
+#include <sys/time.h>           // Timing functions and definitions
+#include <getopt.h>             // Option parsing
+#include <errno.h>              // Error codes
 
-//  #include <bits/sigaction.h>    //sigaction  //qwe wewqe
-
+#include "libaxidma.h"          // Interface to the AXI DMA
 #include "fly_dma.h"
 
-////////////////////////////////////////////////////////////////DMA_TRANS
-#define AXIDMA_IOCTL_MAGIC              'W'
-struct copy_done
+
+// axidma_init(); //初始化 axi dma 设备，获取fd
+// axidma_malloc(axidma_dev, tx_size);//这里会做内存映射，映射cma 内存到用户空间
+// axidma_oneway_transfer(dev, rx_channel, rx_buf, rx_size, true);//单向传输，可以发送、接收
+// axidma_free(axidma_dev, tx_buf, tx_size);//释放内存映射，也就是cma 内存
+// axidma_destroy(axidma_dev);//关闭设备
+
+// #define SINGLE_TRANS_LEN    (4102*8*4)  //yici tu de zijie changdu 
+// #define BUFF_SIZE (512<<10)
+
+axidma_dev_t axidma_dev;
+char *tx_buf;
+char *rx_buf;
+int buf_size;
+int read_size;
+
+// void callbackAfterRecive(int channelid,void* data)
+// {
+//     // printf("INFO: callback func triggerd,channelid: %d\n",channelid);
+//     for(int i = 0;i < 100;i++)
+//     {
+//         printf("%x ",*((unsigned char*)(rx_buf)+i));
+//     }
+//     printf("\n");
+//     fly_dma_recv_data();
+// }
+
+axidma_cb_t gcallback;
+void callbackdma(int channelid,void* data)
 {
-    char id;    
-};
-
-struct dma_status
-{
-    char status;    
-};
-
-#define SET_DMA_SIGNAL           _IO(AXIDMA_IOCTL_MAGIC, 2)
-#define SET_DMA_START           _IO(AXIDMA_IOCTL_MAGIC, 3)
-#define SET_DMA_STOP           _IO(AXIDMA_IOCTL_MAGIC, 4)
-#define SET_DMA_RESET           _IO(AXIDMA_IOCTL_MAGIC, 5)
-#define SET_DMA_COPY_DONE       _IOR(AXIDMA_IOCTL_MAGIC, 6 ,struct copy_done)
-#define GET_DMA_STATUS       _IOR(AXIDMA_IOCTL_MAGIC, 7 ,struct dma_status)
-
-#define DMA_ADDR_MAX_NUM 10
-#define DMA_1_MAX_LEN 524800
-#define DMA1_DEV_PATH     ("/dev/fly_dma1")
-
-///////////////////////////////////////////////////////DMA
-typedef void (*SIG_HANDLER)(int signal, siginfo_t *siginfo, void *context);
-static struct dma_addr dma1_addr_array[DMA_ADDR_MAX_NUM];
-
-struct dma_dev fly_dma1;
-
-////////////////////////////////////////////////////////////
-
-static int mmap_array_init_1 (int fd)
-{
-    void *addr;
-    int i = 0, num = sizeof(dma1_addr_array)/sizeof(dma1_addr_array[0]);
-
-    memset(dma1_addr_array,0,sizeof(dma1_addr_array));
-    for (i = 0; i < num; i++)
+    for(int i = 0;i < 10;i++)
     {
-        
-        addr = mmap(NULL, DMA_1_MAX_LEN, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-         if (addr == MAP_FAILED) {
-            break;
-         }
-         
-        dma1_addr_array[i].addr =  addr;
-        dma1_addr_array[i].len = DMA_1_MAX_LEN;
+        printf("%x ",*((unsigned char*)(rx_buf)+i));
     }
-
-    printf("mmap num %d\n",i);
-    
-        return i;
+    printf("\n");
+    if (gcallback != NULL)
+    {
+        gcallback(channelid,data);
+    }
 }
 
-///////////////////////////////////////DMA1 irq handle function to write cache by malloc from dma1 cache
-static void signal_handler_1(int signal, siginfo_t *siginfo, void *context)
+int fly_dma_init(int bufSize,int readSize)
 {
-    //char * p;
-    //int trans_number_c = 0;
-    int len;
-    int ret;
-    unsigned char err_no,id;
-    struct copy_done param;
-    //int i;
-    // Silence the compiler
-    (void)signal;
-    (void)context;
+    buf_size = bufSize;
+    read_size = readSize;
 
-    err_no =  (siginfo->si_int >> 29)&0x07;
-    id   = (siginfo->si_int >> 24)&0x1F;
-    len = (siginfo->si_int&0xFFFFFF);
-    //printf("dma1:%d\n",len);            
-    if (err_no)
-    {
-        printf("dma1 err no %d\n",err_no);
-        //return;
-    }
-    else //copy data  
-    {
-        if (!fly_dma1.cache || (id >= DMA_ADDR_MAX_NUM) || (0 == dma1_addr_array[id].addr))
-        {
-           printf("signal param error\n");
-        }
-        else
-        {
-            // ret = cache_write_data(fly_dma1.cache,dma1_addr_array[id].addr,len);
+    // printf("buf_size %d,read_size %d\n",buf_size,read_size);
 
-            if (ret == 0)
-            {
-                printf("cache1 is full\n");
-            }
-        }
-        //printf("len is %d\n",len);
-    }
-    param.id = id;
-    // p = (char *)dma1_addr_array[id].addr;
-    // printf("dma1 to cache:%x %x %x %x\n",p[4],p[5],p[6],p[7]);
-    ret = ioctl(fly_dma1.fd,SET_DMA_COPY_DONE,&param);
-    if(ret < 0)
-        printf("SET_DMA1_COPY_DONE error\n");
-}
-
-static int setup_dma1_signal_handler(int fd,SIG_HANDLER handler)//,int dma_number)
-{
-    
-    int rc;
-    struct sigaction sigact;
-
-    if ( fd < 0 || handler == NULL)
+    const array_t *rx_chans;
+    axidma_dev = axidma_init();
+    if (axidma_dev == NULL) {
+        fprintf(stderr, "Failed to initialize the AXI DMA device.\n");
         return -1;
-    // Register a signal handler for the real-time signal
-    sigact.sa_sigaction = handler;
-    sigemptyset(&sigact.sa_mask);
-    sigact.sa_flags = SA_RESTART | SA_SIGINFO;
-    rc = sigaction(SIGRTMIN+6, &sigact, NULL);
-    if (rc < 0) {
-        perror("Failed to create DMA signal");
-        return rc;
     }
 
-    // Tell the driver to deliver us SIGRTMIN upon DMA completion
-    rc = ioctl(fd, SET_DMA_SIGNAL, SIGRTMIN+6);//+dma_number);
-    if (rc < 0) {
-        perror("Failed to register the DMA  signal");
-        return rc;
-    }
-
-    return 0;
-}
-
-/////////////////////////////////////////////////////////////////////////////////
-
-int start_dma(int fd)
-{
-    int rc;
-    
-    if ( fd < 0 )
+    // printf("send chl len %d\n",axidma_get_dma_tx(axidma_dev)->len);
+    // printf("read chl len %d\n",axidma_get_dma_rx(axidma_dev)->len);
+    rx_chans = axidma_get_dma_rx(axidma_dev);
+    if (rx_chans->len < 1) {
+        fprintf(stderr, "Error: No receive channels were found.\n");
         return -1;
-    
-    rc = ioctl(fd, SET_DMA_START, 0);
-    if (rc < 0) {
-        printf("START dma fail %d\n",rc);
-        return rc;
     }
 
-    return 0;
-}
-
-static int reset_dma(int fd)
-{
-    int rc;
-
-    if ( fd < 0 )
+    rx_buf = axidma_malloc(axidma_dev, buf_size);
+    if (rx_buf == NULL) {
+        perror("Unable to allocate receive buffer from the AXI DMA device");
         return -1;
-        
-    rc = ioctl(fd, SET_DMA_RESET, 0);
-    if (rc < 0) {
-        printf("RESET dma fail %d\n",rc);
-        return rc;
     }
+    axidma_stop_transfer(axidma_dev,0);
 
     return 0;
 }
 
-int init_dma_1(void)
+int fly_dma_free()
 {
-    int ret1 = 0;
-    
-    if ( fly_dma1.inited )
-        return -1;
-
-    fly_dma1.fd = open(DMA1_DEV_PATH, O_RDWR|O_EXCL);
-
-    printf("dma1 fd is %d\n",fly_dma1.fd);
-
-    if ( fly_dma1.fd < 0)
-    {
-        printf("open %s fail\n",DMA1_DEV_PATH);
-        return fly_dma1.fd;
-    }
-
-    reset_dma(fly_dma1.fd);
-    
-    ret1 = mmap_array_init_1(fly_dma1.fd);
-
-    if (ret1 < 0)
-    {
-        printf("mmap fail  %d\n",ret1);
-        goto FAIL;
-    }
-
-    fly_dma1.array_num = ret1;
-
-    ret1 = setup_dma1_signal_handler(fly_dma1.fd,signal_handler_1);//,1);
-    if (ret1 < 0)
-    {
-        printf("setup_dma1_signal_handler fail %d\n",ret1);
-        goto FAIL;
-    }
-
-    fly_dma1.inited = true;
-    fly_dma1.status = 1;
-    
-    //
-    start_dma(fly_dma1.fd);
-    // pthread_t dma_data_id;
-    // pthread_create(&dma_data_id, NULL, (void *)uart_send_state, NULL);
-    // pthread_join(dma_data_id, NULL);
-
+    axidma_free(axidma_dev, rx_buf, buf_size);
+    axidma_destroy(axidma_dev);
     return 0;
-
-FAIL:
-    if (fly_dma1.array_num)
-    {
-        //munmap ?
-    }
-
-    if ( fly_dma1.fd )
-    {
-        close(fly_dma1.fd);
-        fly_dma1.fd = -1;
-    }
-
-    return -1;
 }
 
-////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////
-
-int release_dma_1(void)
+int fly_dma_setCallBackAndStart(axidma_cb_t callback)
 {
-    if ( !fly_dma1.inited )
-        return 0;
-
-    if (fly_dma1.array_num)
+    if (callback == NULL)
     {
-        //munmap ?
+       return -1;
     }
-
-    if (fly_dma1.cache)
-        free(fly_dma1.cache);
-    fly_dma1.cache = NULL;
     
-    close(fly_dma1.fd);
-    fly_dma1.fd = -1;
-    fly_dma1.inited = false;
+    // callback(1,NULL);
+    // return 0;
+
+    gcallback = callback;
+
+    //todo 可以尝试使用异步传输
+    // axidma_set_callback(axidma_dev,0,callback,NULL);
+    // axidma_set_callback(axidma_dev,0,callbackdma,NULL);
+    fly_dma_recv_data();
     return 0;
 }
 
+char * fly_dma_getRxBuf()
+{
+    return rx_buf;
+}
 
-//////////////////////////////////////////////////////////////////////
-    
+void fly_dma_recv_data()
+{
+    // axidma_oneway_transfer(axidma_dev,0,rx_buf,read_size,false);
+
+    int ret= axidma_oneway_transfer(axidma_dev,0,rx_buf,read_size,true);
+    if (ret == 0)
+    {
+        gcallback(0,NULL);
+        // printf("recv data\n");
+        // for (int i = 0; i < read_size; i++)
+        // {
+        //     printf("%x",rx_buf[i]);
+        // }
+    }
+}

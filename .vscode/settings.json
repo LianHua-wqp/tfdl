@@ -2,6 +2,11 @@
     "files.associations": {
         "fly_uart.h": "c",
         "termios.h": "c",
-        "sigaction.h": "c"
+        "sigaction.h": "c",
+        "stdio.h": "c",
+        "stat.h": "c",
+        "fly_dma.h": "c",
+        "time.h": "c",
+        "libaxidma.h": "c"
     }
 }

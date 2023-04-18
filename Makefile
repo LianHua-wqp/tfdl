@@ -7,25 +7,29 @@ GOCC=${PREFIX}gcc
 GOAR=${PREFIX}ar
 
 
-SRCS := fly_uart.c fly_dma.c hello.c
-TEMPPATH = "./partc/"
-TEMP_TEST_1 = $(if $(SRCS), $(addprefix $(TEMPPATH),$(SRCS)), %)
-# APP_OBJS := fly_uart.o hello.o
+SRCS := fly_uart.c fly_dma.c libaxidma.c fpga.c fly_gpio.c fly_bd.c
+PATH_PREFIX = "./partc/"
+# FULL_SRCS = $(if $(SRCS), $(addprefix $(PATH_PREFIX),$(SRCS)), %)	#addprefix 添加前缀函数
+FULL_SRCS = $(addprefix $(PATH_PREFIX),$(SRCS))	#addprefix 添加前缀函数
+OBJ_O = $(patsubst %.c,%.o,$(FULL_SRCS))
+TEMP_A = $(patsubst %.c,lib%.a,$(SRCS))
+OBJ_A = $(addprefix $(PATH_PREFIX),$(TEMP_A))
+
 MY_LIB = libfly.a	#生成的静态库名称，记得在main里面导入
 
 all: build
 
 test:
-	@echo ${TEMP_TEST_1}
-	${GOCC} -c ${TEMP_TEST_1}
-	${GOAR} -cr ${MY_LIB} *.o
-	CGO_ENABLED=1 GOOS=linux GOARCH=arm CC=${GOCC} go build -o ${BINARY}
+	@echo ${FULL_SRCS}
+	@echo ${OBJ_O}
+	@echo ${OBJ_A}
+
+	@${GOCC} -c ${FULL_SRCS}
 
 build:
-	${GOCC} -c ${SRCS}
-	${GOAR} -cr ${MY_LIB} *.o
-	CGO_ENABLED=1 GOOS=linux GOARCH=arm CC=${GOCC} go build -o ${BINARY}
-# ${GOAR} -cr ${MY_LIB} ${APP_OBJS}		#在不同目录时，需要使用的写法
+	@${GOCC} -c ${FULL_SRCS}
+	@${GOAR} -cr ${MY_LIB} *.o
+	@CGO_ENABLED=1 GOOS=linux GOARCH=arm CC=${GOCC} go build -ldflags="-s -w" -o ${BINARY}
 run:
 	@go run ./
 

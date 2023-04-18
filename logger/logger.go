@@ -1,10 +1,6 @@
 package logger
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/natefinch/lumberjack"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -13,6 +9,11 @@ import (
 	"strings"
 	"tfdl/settings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/natefinch/lumberjack"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var lg *zap.Logger
@@ -31,6 +32,7 @@ func getLogWriter(filename string, maxSize, maxBackup, maxAgent int) zapcore.Wri
 
 func getEncoder() zapcore.Encoder {
 	encoderConfig := zap.NewProductionEncoderConfig()
+	// encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder //正常读写的时间
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder //正常读写的时间
 	//encoderConfig.TimeKey = "time"
 	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder //zapcore.CapitalLevelEncoder
@@ -41,13 +43,14 @@ func getEncoder() zapcore.Encoder {
 }
 
 func Init(cfg *settings.LogConfig, mode string) (err error) {
+
 	writer := getLogWriter(cfg.FileName, cfg.MaxSize, cfg.MaxBackups, cfg.MaxAgent)
 	encoder := getEncoder()
-	var l = new(zapcore.Level)
-	err = l.UnmarshalText([]byte(cfg.Level))
-	if err != nil {
-		return
-	}
+	// var l = new(zapcore.Level)
+	// err = l.UnmarshalText([]byte(cfg.Level))
+	// if err != nil {
+	// 	return
+	// }
 
 	var core zapcore.Core
 	if mode == "dev" {
@@ -64,7 +67,7 @@ func Init(cfg *settings.LogConfig, mode string) (err error) {
 
 	lg = zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(lg)
-	zap.L().Info("init logger success")
+	zap.L().Debug("init logger success")
 	return
 }
 
